@@ -23,6 +23,7 @@
 //#define ATE0 "ATE0\r"
 //#define AT_K0 "AT&K0\r"
 
+
 /* Public Enums ------------------------------------------------------------------------------------*/
 
 typedef enum {
@@ -154,13 +155,30 @@ typedef enum {
     RB_STATUS_MESSAGE_NO_SENT,
     RB_STATUS_SENDING_MESSAGE,
     RB_STATUS_MESSAGE_RECEIVED,
+    RB_STATUS_MESSAGE_RECEIVED_WITH_QUEUE,
     RB_STATUS_MESSAGE_NO_RECEIVED,
     RB_STATUS_MESSAGE_NO_EXIST,
     RB_STATUS_SBD_SESSION_FAILURE,
     RB_STATUS_MESSAGE_IN_QUEUE,
     RB_STATUS_NO_MESSAGE_IN_QUEUE,
     RB_STATUS_INVALID_PARAM,
-    RB_STATUS_INITIALIZING
+    RB_STATUS_INITIALIZING,
+
+    // SBDD0 status
+    RB_SBDD0_STATUS_ERROR,
+    RB_SBDD0_STATUS_TIMEOUT,
+
+    // SBDWT status
+    RB_SBDWT_STATUS_ERROR,
+    RB_SBDWT_STATUS_TIMEOUT,
+
+    // SBDRT status
+    RB_SBDRT_STATUS_ERROR,
+    RB_SBDRT_STATUS_TIMEOUT,
+
+    // SBDIX status
+    RB_SBDIX_STATUS_ERROR,
+    RB_SBDIX_STATUS_TIMEOUT
 }RB_Status_t;
 
 /* Public Structures -------------------------------------------------------------------------------*/

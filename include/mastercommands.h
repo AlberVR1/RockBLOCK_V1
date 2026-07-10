@@ -17,6 +17,7 @@ typedef enum
     MASTER_START_MISSION = 0,
     WAIT_FOR_RBMESSAGE,
     MASTER_SEND_MESSAGE,
+    MASTER_RECEIVE_MESSAGE,
     NO_ACTION
 }main_commands_t;
 

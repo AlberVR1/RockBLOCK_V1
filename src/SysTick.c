@@ -103,6 +103,25 @@ static uint32_t Get_Milis(void)
     return msTicks;
 }
 
+/**
+ * @brief Set a delay
+ *
+ * This function create a loop in ms
+ *
+ * @param
+ *
+ */
+void Delay_ms(uint32_t ms)
+{
+
+    Start_Count();  //Start Count
+
+    while(msTicks < ms);
+
+    Stop_Count();
+
+}
+
 /* Public API Instance ----------------------------------------------------------------------------*/
 /*
  * @brief Public SYSTICK API Instance
@@ -112,7 +131,8 @@ const SYSTICK_Interface_t SYSTICK_API = {
     .init = Init,
     .Stop_Count = Stop_Count,
     .Start_Count = Start_Count,
-    .milis = Get_Milis
+    .milis = Get_Milis,
+    .delay_ms = Delay_ms
 };
 
 /* Interrupt Service Routines ---------------------------------------------------------------------*/

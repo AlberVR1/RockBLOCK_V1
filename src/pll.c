@@ -189,6 +189,10 @@
 //TM4C123GH6PM FIELDS in the SYSCTL_RIS register
 #define SYSCTL_RIS_PLLLRIS      0x00000040  // PLL Lock Raw Interrupt Status
 
+
+#define PLL_LOCK_TIMEOUT_MS     1000
+#define SYSCLK_16MHZ            16000000UL
+
 /* Private Function Prototypes ---------------------------------------------------------------------*/
 static PLL_Status_t PLL_InitHardware(PLL_Handle_t *handle);
 static uint32_t PLL_CalculateFrequency(uint32_t frequency_MHz);
@@ -205,7 +209,7 @@ static bool PLL_IsValidFrequency(uint32_t frequency_MHz);
  */
 PLL_Status_t PLL_Init(PLL_Handle_t *handle, PLL_Frequency_t frequency)
 {
-    if(!handle && !frequency) {
+    if(!handle || !frequency) {
         return PLL_STATUS_INVALID_PARAM;
     }
 
@@ -232,7 +236,7 @@ PLL_Status_t PLL_Init(PLL_Handle_t *handle, PLL_Frequency_t frequency)
  * @return PLL_Status_t Status of the initialization
  *
  */
-static PLL_Status_t PLL_InitHardware(PLL_Handle_t *handle)
+/*static PLL_Status_t PLL_InitHardware(PLL_Handle_t *handle)
 {
     if(!PLL_IsValidHandle(handle)) {
         return PLL_STATUS_INVALID_PARAM;
@@ -259,6 +263,60 @@ static PLL_Status_t PLL_InitHardware(PLL_Handle_t *handle)
     // 6: Enable use of PLL by clearing BYPASS.
     SYSCTL_RCC2_R &= ~SYSCTL_RCC2_BYPASS2;
     return PLL_STATUS_SUCCESS;
+}*/
+static PLL_Status_t PLL_InitHardware(PLL_Handle_t *handle)
+{
+    if(!PLL_IsValidHandle(handle)) {
+        return PLL_STATUS_INVALID_PARAM;
+    }
+    // 0: Configure the system to use RCC2 for advanced features
+    //   such as 400 MHz PLL and non-integer system clock dividers.
+    SYSCTL_RCC2_R |= SYSCTL_RCC2_USERCC2;
+    // 1: Bypass the PLL while initializing.
+    SYSCTL_RCC2_R |= SYSCTL_RCC2_BYPASS2;
+    // 2: Select the crystal value and oscillator source.
+    SYSCTL_RCC_R &= ~SYSCTL_RCC_XTAL_M;
+    SYSCTL_RCC_R += SYSCTL_RCC_XTAL_16MHZ;
+    SYSCTL_RCC2_R &= ~SYSCTL_RCC2_OSCSRC2_M;
+    SYSCTL_RCC2_R += SYSCTL_RCC2_OSCSRC2_MO;
+    // 3: Activate the PLL by clearing PWRDN.
+    SYSCTL_RCC2_R &= ~SYSCTL_RCC2_PWRDN2;
+    // 4: Set the desired system divider and the system clock to use the PLL.
+    uint32_t pll_sysdiv2 = PLL_CalculateFrequency(handle->frequency);
+
+    // Validate sysdiv2
+    if(pll_sysdiv2 > 0x1F)
+    {
+        return PLL_STATUS_FREQ_OUT_OF_RANGE;
+    }
+
+    SYSCTL_RCC2_R |= SYSCTL_RCC2_DIV400; // Use 400 MHz PLL
+    SYSCTL_RCC2_R = (SYSCTL_RCC2_R & ~0X1FC00000)   //Clear system clock divider field
+                    + (pll_sysdiv2 << 22);          // Configure for desired system clock
+    //SYSCTL_RCC2_R = (SYSCTL_RCC2_R & ~(0x1F << 22)) | (pll_sysdiv2 << 22);
+
+    // 5: Wait for the PLL to lock by polling the PLLLRIS bit in the Raw Interrupt Status register.
+    uint32_t timeout_cycles = (PLL_LOCK_TIMEOUT_MS * SYSCLK_16MHZ) / 1000UL;
+    uint32_t wait_count = 0;
+
+    while(((SYSCTL_RIS_R & SYSCTL_RIS_PLLLRIS) == 0) && (wait_count < timeout_cycles))
+    {
+        wait_count++;
+    }
+    if(wait_count >= timeout_cycles)
+    {
+        return PLL_STATUS_LOCK_TIMEOUT;
+    }
+    // 6: Enable use of PLL by clearing BYPASS.
+    SYSCTL_RCC2_R &= ~SYSCTL_RCC2_BYPASS2;
+
+    // 7: Verify PLL is driving system clock
+    uint32_t rcc2_snap = SYSCTL_RCC2_R;
+    if((rcc2_snap & SYSCTL_RCC2_BYPASS2) != 0)
+    {
+       return PLL_STATUS_BYPASS_NOT_CLEARED;
+    }
+    return PLL_STATUS_SUCCESS;
 }
 
 /**
@@ -270,7 +328,7 @@ static PLL_Status_t PLL_InitHardware(PLL_Handle_t *handle)
  */
 static bool PLL_IsValidHandle(const PLL_Handle_t *handle)
 {
-    return (handle != NULL && handle->usePLL) ? false : true;
+    return handle != NULL;
 }
 
 /**
@@ -324,6 +382,7 @@ uint32_t PLL_GetFrequency(void)
 {
     //Get the current value of the SYSDIV2 field
     uint32_t sysdiv2 = (SYSCTL_RCC2_R & 0x1FC00000) >> 22;
+    //uint32_t sysdiv2 = (SYSCTL_RCC2_R & (0x1F << 22)) >> 22;
     //Calculate the current frequency of the PLL
     return (uint32_t)(400U / (sysdiv2 + 1U));
 }

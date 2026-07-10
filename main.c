@@ -18,6 +18,8 @@
  * Alt+217 -> ┘    Alt+218 -> ┌    Alt+191 -> ┐    Alt+192-> └    Alt+196 -> ─    Alt+124 -> |    Alt+195-> ├    Alt+180 -> ┤
  *
  * ┌─────────────────────────────────┐
+ * |        RockBLOCK9602 module     |  <- Your hardware
+ * ├─────────────────────────────────┤
  * |        APLICATION (main.c)      |  <- Your api code
  * ├─────────────────────────────────┤
  * |      PUBLIC API (RockBLOCK_API) |  <- Simple and clean interface
@@ -28,7 +30,29 @@
  * |        HARDWARE (TM4C123)       |  <- MCU's registers
  * └─────────────────────────────────┘
  *
- * @version 1.00
+ *
+ * MCU PINOUT
+ * ┌─────────────────────────────────┐
+ * |                                 |
+ * |  TM4C123GXL LaunchPad           |
+ * ├─────────────────────────────────┤
+ * |                                 |
+ * |                          PF2───>|  Ring Alert
+ * |                          PF3───>|  Network Available
+ * |                          PF4───>|  On/Off
+ * |                                 |
+ * |                          PD6───>|
+ * |                          PD7───>|
+ * └─────────────────────────────────┘
+ *
+ *
+ *
+ *
+ *
+ *
+ *
+
+ * @version 2.00
  * @date 2026-03-02
  */
 
@@ -46,10 +70,14 @@
 void configuration(void);
 
 /* Private global variables-------------------------------------------------------------------------*/
+uint32_t freqqq = 0;
+
 static bool send_message = false;
 static bool receive_message = false;
 static bool signal_quality = false;
 static RB_Data_t rb_data;
+
+
 
 main_commands_t main_command = WAIT_FOR_RBMESSAGE;
 UART1_frame_to_send_t u1_frame_send = {
@@ -67,8 +95,10 @@ int main(void)
 {
     rb_data.RockBLOCK_Status = RB_STATUS_INITIALIZING;
     configuration();
-
-    while(true) {
+    freqqq = PLL_API.getPLLFrequency();
+    while(true)
+    {
+// Main actions
         switch(main_command) 
         {
         case NO_ACTION:
@@ -79,6 +109,7 @@ int main(void)
             break;
         case WAIT_FOR_RBMESSAGE:
             rb_data.RockBLOCK_Status = RockBLOCK_API.waiting_message();
+            SYSTICK_API.delay_ms(5000);
             if(rb_data.RockBLOCK_Status == RB_STATUS_MESSAGE_IN_QUEUE)
             {
                 receive_message = true;
@@ -89,10 +120,15 @@ int main(void)
             send_message = true;
             main_command = NO_ACTION;
             break;
+        case MASTER_RECEIVE_MESSAGE:
+            receive_message = true;
+            main_command = NO_ACTION;
+            break;
         }
-
+// Send Message to GSS
         if(send_message) {
             rb_data.RockBLOCK_Status = RB_STATUS_SENDING_MESSAGE;
+            // THis function try send a message three times
             rb_data.RockBLOCK_Status = RockBLOCK_API.send_long_message(&rb_data.mo_status,
                                                           &rb_data.momsn,
                                                           &rb_data.mt_status,
@@ -100,17 +136,27 @@ int main(void)
                                                           &rb_data.mt_length,
                                                           &rb_data.mt_queued,
                                                           (char*)u1_frame_send.buffer_to_receive);
-            if(rb_data.RockBLOCK_Status == RB_STATUS_MESSAGE_NO_SENT)
+            switch(rb_data.RockBLOCK_Status) // Check message sent
             {
-
+            case RB_STATUS_MESSAGE_SENT:
+                // Wait MCU main actions
+                break;
+            case RB_STATUS_MESSAGE_NO_SENT:
+                // no session, try move antenna other position
+                break;
+            default:
+                //Status AT Commands error, try again?
+                break;
             }
-            PLL_API.delayMs(2000);
+            send_message = false;
+            SYSTICK_API.delay_ms(2000);
             send_message = false;
             main_command = WAIT_FOR_RBMESSAGE;
         }
+// Receive message from GSS
         if(receive_message) {
-
             rb_data.RockBLOCK_Status = RB_STATUS_INQUIRING_MESSAGE;
+        // THis function try check for message three times
             rb_data.RockBLOCK_Status = RockBLOCK_API.receive_check(&rb_data.mo_status,
                                                           &rb_data.momsn,
                                                           &rb_data.mt_status,
@@ -118,15 +164,28 @@ int main(void)
                                                           &rb_data.mt_length,
                                                           &rb_data.mt_queued,
                                                           (char*)u1_frame_send.buffer_to_send);
-            if(rb_data.RockBLOCK_Status == RB_STATUS_MESSAGE_RECEIVED)
+            switch(rb_data.RockBLOCK_Status)    // Check status message incoming
             {
-                
+            case RB_STATUS_MESSAGE_RECEIVED:
+                //Send_message_to_MCU();
+                break;
+            case RB_STATUS_MESSAGE_RECEIVED_WITH_QUEUE:
+                // Get newest message
+                break;
+            case RB_STATUS_MESSAGE_NO_EXIST:
+                // No message exist
+                break;
+            case RB_STATUS_SBD_SESSION_FAILURE:
+                // Try depending MCU main
+                break;
+            case RB_STATUS_MESSAGE_NO_RECEIVED:
+                // Status AT Commands error, try again?
+                break;
+            default:
+                //Status AT Commands error, try again?
+                break;
             }
-            else
-            {
-                receive_message = false;
-            }
-            main_command = WAIT_FOR_RBMESSAGE;
+            receive_message = false;
         }
         if(signal_quality) {
             rb_data.RockBLOCK_Status = RB_STATUS_GETTING_SIGNAL;

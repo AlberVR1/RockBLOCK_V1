@@ -10,6 +10,9 @@
 #include "tm4c123gh6pm.h"
 #include "mastercommands.h"
 
+
+
+
 /* Private variables--------------------------------------------------------------------------------*/
 static PLL_Handle_t pll_handle;
 static UART_Handle_t uart1_handle;
@@ -389,6 +392,7 @@ RB_Status_t RB_send__long_message(uint8_t *mo_status,
                             uint8_t *mt_queued,
                             const char *msg)
 {
+    RB_Response_t responsenet = RB_NO_AT_COMMAND_SENT;
     static uint8_t tries = 0;
     rb_dev.at_response_received = RB_NO_AT_COMMAND_SENT;
 
@@ -396,7 +400,7 @@ RB_Status_t RB_send__long_message(uint8_t *mo_status,
     if(output_pf4.current_state != GPIO_STATE_HIGH) {
         RB_Response_t pinstatus = RockBLOCKWakeUp();
         if(pinstatus != RB_WAKEUP_OK) {
-            return RB_STATUS_WAKEUP_ERROR;
+            //return RB_STATUS_WAKEUP_ERROR;
         }
     }
 
@@ -408,13 +412,24 @@ RB_Status_t RB_send__long_message(uint8_t *mo_status,
             break;
         }
         tries++;
-    }while(tries<=3);
+    }while(tries<=0);
     switch(rb_dev.at_response_received) {
-        case RB_AT_SBDD0_COMMAND_RESPONSE_RECEIVED_ERROR:
-            return RB_STATUS_ERROR;
-        case RB_AT_SBDD0_COMMAND_RESPONSE_TIMEOUT:
-            return RB_STATUS_TIMEOUT;
+    case RB_AT_SBDD0_COMMAND_RESPONSE_RECEIVED_ERROR:
+        return RB_SBDD0_STATUS_ERROR;
+    case RB_AT_SBDD0_COMMAND_RESPONSE_TIMEOUT:
+        return RB_SBDD0_STATUS_TIMEOUT;
     }
+    // Check Network Availability by PF3 three times
+    // It's necessary to get a stability
+    tries = 0;
+    do {
+        responsenet = RockBlockNetworkAvailability();
+        if(responsenet == RB_NETAV_OK) {
+            break;
+        }
+        PLL_API.delayMs(1000);
+        tries++;
+    }while(tries<=3);
 
     // Send message to ISU -> MO (Mobile Originated) buffer
     tries = 0;
@@ -427,19 +442,19 @@ RB_Status_t RB_send__long_message(uint8_t *mo_status,
     }while(tries<=3);
     switch(rb_dev.at_response_received) {
         case RB_AT_SBDWT_COMMAND_RESPONSE_RECEIVED_ERROR:
-            return RB_STATUS_ERROR;
+            return RB_SBDWT_STATUS_ERROR;
         case RB_AT_SBDWT_COMMAND_RESPONSE_TIMEOUT:
-            return RB_STATUS_TIMEOUT;
+            return RB_SBDWT_STATUS_TIMEOUT;
     }
 
-    // Send messate from ISU -> GSS (GSM Originated) buffer
+    // Send message from ISU -> GSS (GSM Originated) buffer
     tries = 0;
     do {
         rb_dev.at_response_received = RB_Send_AT_SBDIX_Command(mo_status,    // Mobile Originated status for AT+SBDIX response
                                                                 momsn,       // Counter for MO (messages that you send), counter from 0 to 65,535 and returns to 0
                                                                 mt_status,   // Mobile Terminated status for AT+SBDIX response
                                                                 mtmsn,       // Counter for MT (messages that is received), counter from 0 to 65,535 and returns to 0
-                                                                mt_length,   // Is the lenght, in bytes, of message terminated received from GSS.
+                                                                mt_length,   // Is the length, in bytes, of message terminated received from GSS.
                                                                 mt_queued,   // Is the message terminated quantity that are in queue in the GSS to be send to ISU.
                                                                 40000); // Wait for response with a timeout of 900 ms
         if(rb_dev.at_response_received == RB_AT_SBDIX_COMMAND_RESPONSE_RECEIVED_SUCCESS) {
@@ -447,10 +462,8 @@ RB_Status_t RB_send__long_message(uint8_t *mo_status,
         }
         tries++;
     }while(tries<=3);
-
     // It's neccesary clear main buffer to wait a mmesage in queue
     clearBuffer();
-
     switch(rb_dev.at_response_received) {
         case RB_AT_SBDIX_COMMAND_RESPONSE_RECEIVED_ERROR:
             return RB_STATUS_ERROR;
@@ -506,15 +519,16 @@ RB_Status_t RB_receive_check(uint8_t *mo_status,
             break;
         }
         tries++;
-    }while(tries<=3);
+    }while(tries<=0);
     switch(rb_dev.at_response_received) {
         case RB_AT_SBDD0_COMMAND_RESPONSE_RECEIVED_ERROR:
-            return RB_STATUS_ERROR;
+            return RB_SBDD0_STATUS_ERROR;
         case RB_AT_SBDD0_COMMAND_RESPONSE_TIMEOUT:
-            return RB_STATUS_TIMEOUT;
+            return RB_SBDD0_STATUS_TIMEOUT;
     }
 
-    /// Check Network Availity
+    // Check Network Availability by PF3 three times
+    // It's necessary to get a stability
     tries = 0;
     do {
         responsenet = RockBlockNetworkAvailability();
@@ -524,28 +538,36 @@ RB_Status_t RB_receive_check(uint8_t *mo_status,
         PLL_API.delayMs(1000);
         tries++;
     }while(tries<=3);
-    // Start SBD Session and receive message
+    // Send message from ISU -> GSS (GSM Originated) buffer
     tries = 0;
     do
     {
-        rb_dev.at_response_received = RB_Send_AT_SBDIX_Command(mo_status, momsn, mt_status, mtmsn, mt_length, mt_queued, 20000);
+        rb_dev.at_response_received = RB_Send_AT_SBDIX_Command(mo_status,    // Mobile Originated status for AT+SBDIX response
+                                                               momsn,       // Counter for MO (messages that you send), counter from 0 to 65,535 and returns to 0
+                                                               mt_status,   // Mobile Terminated status for AT+SBDIX response
+                                                               mtmsn,       // Counter for MT (messages that is received), counter from 0 to 65,535 and returns to 0
+                                                               mt_length,   // Is the length, in bytes, of message terminated received from GSS.
+                                                               mt_queued,   // Is the message terminated quantity that are in queue in the GSS to be send to ISU.
+                                                               40000); // Wait for response with a timeout of 900 ms
         if(rb_dev.at_response_received == RB_AT_SBDIX_COMMAND_RESPONSE_RECEIVED_SUCCESS) {
             // Make the action when a several messages are in queue
             break;
         }
         tries++;
     }while(tries<= 3);
+    // It's neccesary clear main buffer to wait a mmesage in queue
+    clearBuffer();
     switch(rb_dev.at_response_received) {
         case RB_AT_SBDIX_COMMAND_RESPONSE_RECEIVED_ERROR:
-            return RB_STATUS_ERROR;
+            return RB_SBDIX_STATUS_ERROR;
         case RB_AT_SBDIX_COMMAND_RESPONSE_TIMEOUT:
-            return RB_STATUS_TIMEOUT;
+            return RB_SBDIX_STATUS_TIMEOUT;
     }
-    if(*mo_status >= 1)
-    {
-        return RB_STATUS_SBD_SESSION_FAILURE;
-    }
-    else if(*mt_status == 1)
+    //if(*mo_status >= 1)
+    //{
+    //    return RB_STATUS_SBD_SESSION_FAILURE;
+    //}
+    if(*mt_status == 1)
     {
         rb_dev.at_response_received = RB_Send_AT_SBDRT_Command(msg, 900); // Wait for response with a timeout of 900 ms
         
@@ -554,16 +576,26 @@ RB_Status_t RB_receive_check(uint8_t *mo_status,
 
         switch(rb_dev.at_response_received) {
             case RB_AT_SBDRT_COMMAND_RESPONSE_RECEIVED_ERROR:
-                return RB_STATUS_ERROR;
+                return RB_SBDRT_STATUS_ERROR;
             case RB_AT_SBDRT_COMMAND_RESPONSE_TIMEOUT:
-                return RB_STATUS_TIMEOUT;
-            default:
-                return RB_STATUS_MESSAGE_RECEIVED;
+                return RB_SBDRT_STATUS_TIMEOUT;
+        }
+        if(mt_queued > 0)
+        {
+                return RB_STATUS_MESSAGE_RECEIVED_WITH_QUEUE;
+        }
+        else
+        {
+            return RB_STATUS_MESSAGE_RECEIVED;
         }
     }
-    else if(*mt_status == 0)
+    else if(*mt_status == 0 && *mo_status == 0)
     {
         return RB_STATUS_MESSAGE_NO_EXIST;
+    }
+    else if(*mo_status > 2)
+    {
+        return RB_STATUS_SBD_SESSION_FAILURE;
     }
     else
     {
@@ -665,18 +697,19 @@ static RB_Response_t RB_Configuring_Commands(void)
  */
 static RB_Response_t RB_Send_AT_Command(uint32_t timeout_ms)
 {
-    uint32_t getmilis = 0;
+    //uint32_t getmilis = 0;
     // Clear main buffer
     clearBuffer();
     UART_API.sendString(&uart2_handle, AT,3);
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.delay_ms(timeout_ms);
+    /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms)
     {
         getmilis = SYSTICK_API.milis();
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
     if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_OK)) {
         return RB_AT_COMMAND_RESPONSE_RECEIVED_SUCCESS;
     }
@@ -703,18 +736,19 @@ static RB_Response_t RB_Send_AT_Command(uint32_t timeout_ms)
  */
 static RB_Response_t RB_Send_ATK0_Command(uint32_t timeout_ms)
 {
-    uint32_t getmilis = 0;
+    //uint32_t getmilis = 0;
     // Clear main buffer
     clearBuffer();
     UART_API.sendString(&uart2_handle, AT_K0,6);
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.delay_ms(timeout_ms);
+    /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms)
     {
         getmilis = SYSTICK_API.milis();
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
     if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_OK)) {
         return RB_AT_K0_COMMAND_RESPONSE_RECEIVED_SUCCESS;
     }
@@ -741,18 +775,19 @@ static RB_Response_t RB_Send_ATK0_Command(uint32_t timeout_ms)
  */
 static RB_Response_t RB_Send_ATE0_Command(uint32_t timeout_ms)
 {
-    uint32_t getmilis = 0;
+    //uint32_t getmilis = 0;
     // Clear main buffer
     clearBuffer();
     UART_API.sendString(&uart2_handle, ATE0,5);
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.delay_ms(timeout_ms);
+    /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms)
     {
         getmilis = SYSTICK_API.milis();
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
     if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_OK)) {
         return RB_ATE0_COMMAND_RESPONSE_RECEIVED_SUCCESS;
     }
@@ -779,7 +814,7 @@ static RB_Response_t RB_Send_ATE0_Command(uint32_t timeout_ms)
  */
 static RB_Response_t RB_RingIndicator_Pin(bool activate,uint32_t timeout_ms)
 {
-    uint32_t getmilis = 0;
+    //uint32_t getmilis = 0;
     // Clear main buffer
     clearBuffer();
     if(activate) {
@@ -788,14 +823,15 @@ static RB_Response_t RB_RingIndicator_Pin(bool activate,uint32_t timeout_ms)
     else {
         UART_API.sendString(&uart2_handle, AT_SBDMTA0,12);
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.delay_ms(timeout_ms);
+    /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms)
     {
         getmilis = SYSTICK_API.milis();
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
     if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_OK)) {
         return RB_ATSBDMTA_COMMAND_RESPONSE_RECEIVED_SUCCESS;
     }
@@ -809,18 +845,19 @@ static RB_Response_t RB_RingIndicator_Pin(bool activate,uint32_t timeout_ms)
 
 static RB_Response_t RB_Send_ATW0_Command(uint32_t timeout_ms)
 {
-    uint32_t getmilis = 0;
+    //uint32_t getmilis = 0;
     // Clear main buffer
     clearBuffer();
     UART_API.sendString(&uart2_handle, AT_W0,6);
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.delay_ms(timeout_ms);
+   /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms)
     {
         getmilis = SYSTICK_API.milis();
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
     if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_OK)) {
         return RB_ATW0_COMMAND_RESPONSE_RECEIVED_SUCCESS;
     }
@@ -834,18 +871,19 @@ static RB_Response_t RB_Send_ATW0_Command(uint32_t timeout_ms)
 
 static RB_Response_t RB_Send_ATY0_Command(uint32_t timeout_ms)
 {
-    uint32_t getmilis = 0;
+    //uint32_t getmilis = 0;
     // Clear main buffer
     clearBuffer();
     UART_API.sendString(&uart2_handle, AT_Y0,6);
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.delay_ms(timeout_ms);
+    /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms)
     {
         getmilis = SYSTICK_API.milis();
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
     if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_OK)) {
         return RB_ATY0_COMMAND_RESPONSE_RECEIVED_SUCCESS;
     }
@@ -878,16 +916,19 @@ static RB_Response_t RB_Send_ATCSQ_Command(uint32_t timeout_ms)
     UART_API.sendString(&uart2_handle, AT_CSQ,7);
 
     // Start a short timeout to wait for the response to be received and stored in the buffer
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < 1000) { // Short timeout to wait for the response to be received and stored in the buffer
         getmilis = SYSTICK_API.milis();
     }
     SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+*/
 
+    SYSTICK_API.delay_ms(1000);
     // Start timeout counter
-    getmilis  = SYSTICK_API.milis();
+    SYSTICK_API.delay_ms(timeout_ms);
+   /*getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms) {
         csq_level = atcsq_response_contains(rb_dev.RBDataRaw);
@@ -896,7 +937,7 @@ static RB_Response_t RB_Send_ATCSQ_Command(uint32_t timeout_ms)
         }
         getmilis = SYSTICK_API.milis();
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
 
     csq_level = atcsq_response_contains(rb_dev.RBDataRaw);
     switch(csq_level) {
@@ -933,18 +974,19 @@ static RB_Response_t RB_Send_ATCSQ_Command(uint32_t timeout_ms)
  */
 static RB_Response_t RB_Send_AT_SBDD0_Command(uint32_t timeout_ms)
 {
-    uint32_t getmilis = 0;
+    //uint32_t getmilis = 0;
     // Clear main buffer
     clearBuffer();
     UART_API.sendString(&uart2_handle, AT_SBDD0, 9);
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.delay_ms(timeout_ms);
+    /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms)
     {
         getmilis = SYSTICK_API.milis();
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
     if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_OK)) {
         return RB_AT_SBDD0_COMMAND_RESPONSE_RECEIVED_SUCCESS;
     }
@@ -973,21 +1015,22 @@ static RB_Response_t RB_Send_AT_SBDD0_Command(uint32_t timeout_ms)
  */
 static RB_Response_t RB_Send_AT_SBDWT_Command(const bool long_message, const char *buff, uint32_t timeout_ms)
 {
-    uint32_t getmilis = 0;
+    //uint32_t getmilis = 0;
     // Clear main buffer
     clearBuffer();
     if(long_message)
     {
         UART_API.sendString(&uart2_handle, AT_SBDWT, 8);
         UART_API.sendString(&uart2_handle, "\r", 1);
-        SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+        SYSTICK_API.delay_ms(timeout_ms);
+        /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
         getmilis  = SYSTICK_API.milis();
         SYSTICK_API.Start_Count(); // Start SysTick to wait for response
         while(getmilis < timeout_ms)
         {
             getmilis = SYSTICK_API.milis();
         }
-        SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+        SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
         if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_ERROR))
         {
             return RB_AT_SBDWT_COMMAND_RESPONSE_RECEIVED_ERROR;
@@ -1008,14 +1051,15 @@ static RB_Response_t RB_Send_AT_SBDWT_Command(const bool long_message, const cha
         UART_API.sendString(&uart2_handle, buff, strlen((const char*)buff));
         UART_API.sendString(&uart2_handle, "\r", 1);
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.delay_ms(timeout_ms);
+    /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms)
     {
         getmilis = SYSTICK_API.milis();
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
     if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_ERROR)) {
         return RB_AT_SBDWT_COMMAND_RESPONSE_RECEIVED_ERROR;
     }
@@ -1028,18 +1072,19 @@ static RB_Response_t RB_Send_AT_SBDWT_Command(const bool long_message, const cha
 
 static RB_Response_t RB_Send_AT_SBDRT_Command(char *buff, uint32_t timeout_ms)
 {
-    uint32_t getmilis = 0;
+    //uint32_t getmilis = 0;
     // Clear main buffer
     clearBuffer();
     UART_API.sendString(&uart2_handle, AT_SBDRT, 9);
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.delay_ms(timeout_ms);
+    /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms)
     {
         getmilis = SYSTICK_API.milis();
     }
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
     if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_SBDRT)) {
         getString((uint8_t*)buff, ':', 13); // Get the message from the response, the message is between the LineFeed LF and CarriageReturn CR
         return RB_AT_SBDRT_COMMAND_RESPONSE_RECEIVED_SUCCESS;
@@ -1054,11 +1099,12 @@ static RB_Response_t RB_Send_AT_SBDRT_Command(char *buff, uint32_t timeout_ms)
 
 static RB_Response_t RB_Send_AT_SBDIX_Command(uint8_t *mo_status, uint16_t *momsn, uint8_t *mt_status, uint16_t *mtmsn, uint16_t *mt_length, uint8_t *mt_queued, uint32_t timeout_ms)
 {
-    uint32_t getmilis = 0;
+    //uint32_t getmilis = 0;
     // Clear main buffer
     clearBuffer();
     UART_API.sendString(&uart2_handle, AT_SBDIX, 9);
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.delay_ms(timeout_ms);
+    /*SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
     getmilis  = SYSTICK_API.milis();
     SYSTICK_API.Start_Count(); // Start SysTick to wait for response
     while(getmilis < timeout_ms)
@@ -1069,7 +1115,7 @@ static RB_Response_t RB_Send_AT_SBDIX_Command(uint8_t *mo_status, uint16_t *moms
         getmilis = SYSTICK_API.milis();
     }
     PLL_API.delayMs(100);
-    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
+    SYSTICK_API.Stop_Count(); // Stop SysTick after waiting*/
     if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_SBDIX))
     {
         // Parse the response to extract MO and MT status
@@ -1200,7 +1246,7 @@ static RB_Response_t RockBLOCKWakeUp(void)
 {
     // Set PF4 high to wake up the RockBLOCK9602 module
     GPIO_Status_t pinstatus = GPIO_API.SetPin(&output_pf4);
-    PLL_API.delayMs(20000); //Wait until RockBLOCK supercondenser charges
+    //PLL_API.delayMs(20000); //Wait until RockBLOCK supercondenser charges
     if(pinstatus != GPIO_STATUS_SUCCESS) {
         return RB_WAKEUP_ERROR;
     }

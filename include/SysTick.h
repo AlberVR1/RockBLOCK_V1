@@ -34,6 +34,7 @@ typedef struct {
     SYSTICK_Status_t (*Stop_Count)(void);
     SYSTICK_Status_t (*Start_Count)(void);
     uint32_t (*milis)(void);
+    void(*delay_ms)(uint32_t ms);
 }SYSTICK_Interface_t;
 
 /* Public API Instance -----------------------------------------------------------------------------*/
