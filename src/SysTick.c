@@ -25,6 +25,11 @@
 #define NVIC_ST_CTRL_INTEN      0x00000002  // Interrupt enable
 #define NVIC_ST_CTRL_ENABLE     0x00000001  // Counter enable
 
+// System Control registers (SYSCTL)
+#define SYSCTL_RCC2_R           (*((volatile uint32_t *)0x400FE070))
+
+static uint32_t SYSTICK_GetFrequency(void);
+
 /* Private Variables ------------------------------------------------------------------------------*/
 static SYSTICK_Exist_t systick_exist = SYSTICK_NOT_EXIST;
 
@@ -44,7 +49,8 @@ volatile uint32_t msTicks = 0; // Counter for 1ms SysTicks
  */
 static SYSTICK_Status_t Init(void)
 {
-    uint32_t freq_mhz = PLL_API.getPLLFrequency();    //Get PLL frequency in MHz
+    //uint32_t freq_mhz = PLL_API.getPLLFrequency();    //Get PLL frequency in MHz
+    uint32_t freq_mhz = SYSTICK_GetFrequency();    //Get PLL frequency in MHz
     NVIC_ST_RELOAD_R = (freq_mhz * 1000)- 1; // Load frequency in Khz - 1 to generate an interrupt
     NVIC_ST_CURRENT_R = 0;              // Limpiar contador actual
     NVIC_ST_CTRL_R = NVIC_ST_CTRL_CLK_SRC;  // Usar reloj del sistema
@@ -52,6 +58,19 @@ static SYSTICK_Status_t Init(void)
     systick_exist = SYSTICK_EXIST; // Set flag to indicate that SysTick is configured
 
     return SYSTICK_STATUS_SUCCESS;
+}
+
+/**
+ * @brief Calculate PLL frequency and check if matches the requested frequency
+ *
+ * @return uint32_t Current PLL frequency in MHz
+ */
+static uint32_t SYSTICK_GetFrequency(void)
+{
+    //Get the current value of the SYSDIV2 field
+    uint32_t sysdiv2 = (SYSCTL_RCC2_R & 0x1FC00000) >> 22;
+    //Calculate the current frequency of the PLL
+    return (uint32_t)(400U / (sysdiv2 + 1U));
 }
 
 /*

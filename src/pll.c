@@ -1,167 +1,15 @@
 /**
- * @file PLL.c
- * @author Alberto Vázquez
- * @brief source file for MCU Clock configuration
+ * @file pll.c
+ * @author Alberto Vazquez
+ * @brief source file for MCU PWM Module x Configuration
  *
- * This source file contains includes and implementation functions
- * for managing TM4C123 clock,and implementations for delays in ms.
  *
  * @version 0.11
- * @date 2025-07-01
+ * @date 2025-09-15
  */
-
 
 /* Includes ----------------------------------------------------------------------------------------*/
-/**
- * @brief header file to add prototypes to this source file.
- *
- * to add the include folder to project, right click over project
- * ->properties-> Build->Arm Compiler->Include Options
- *
- * Inside Include Options, add "${PROJECT_ROOT}/include".
- *
- * Now you can use header files.
- */
-#include <include/pll.h>
-
-/**
- * @brief Initializes Main clock the PLL to the desired frequency,
- * we can configure 80,50,40,25,20,16,10,8,4 [MHz]
- *
- * bus frequency is 400MHz/(SYSDIV2+1) = 400MHz/(7+1) = 50 MHz
- *
- * SYSDIV2  Divisor  Clock (MHz)
- * 0        1       reserved
- * 1        2       reserved
- * 2        3       reserved
- * 3        4       reserved
- * 4        5       80.000
- * 5        6       66.667
- * 6        7       reserved
- * 7        8       50.000
- * 8        9       44.444
- * 9        10      40.000
- * 10       11      36.364
- * 11       12      33.333
- * 12       13      30.769
- * 13       14      28.571
- * 14       15      26.667
- * 15       16      25.000
- * 16       17      23.529
- * 17       18      22.222
- * 18       19      21.053
- * 19       20      20.000
- * 20       21      19.048
- * 21       22      18.182
- * 22       23      17.391
- * 23       24      16.667
- * 24       25      16.000
- * 25       26      15.385
- * 26       27      14.815
- * 27       28      14.286
- * 28       29      13.793
- * 29       30      13.333
- * 30       31      12.903
- * 31       32      12.500
- * 32       33      12.121
- * 33       34      11.765
- * 34       35      11.429
- * 35       36      11.111
- * 36       37      10.811
- * 37       38      10.526
- * 38       39      10.256
- * 39       40      10.000
- * 40       41      9.756
- * 41       42      9.524
- * 42       43      9.302
- * 43       44      9.091
- * 44       45      8.889
- * 45       46      8.696
- * 46       47      8.511
- * 47       48      8.333
- * 48       49      8.163
- * 49       50      8.000
- * 50       51      7.843
- * 51       52      7.692
- * 52       53      7.547
- * 53       54      7.407
- * 54       55      7.273
- * 55       56      7.143
- * 56       57      7.018
- * 57       58      6.897
- * 58       59      6.780
- * 59       60      6.667
- * 60       61      6.557
- * 61       62      6.452
- * 62       63      6.349
- * 63       64      6.250
- * 64       65      6.154
- * 65       66      6.061
- * 66       67      5.970
- * 67       68      5.882
- * 68       69      5.797
- * 69       70      5.714
- * 70       71      5.634
- * 71       72      5.556
- * 72       73      5.479
- * 73       74      5.405
- * 74       75      5.333
- * 75       76      5.263
- * 76       77      5.195
- * 77       78      5.128
- * 78       79      5.063
- * 79       80      5.000
- * 80       81      4.938
- * 81       82      4.878
- * 82       83      4.819
- * 83       84      4.762
- * 84       85      4.706
- * 85       86      4.651
- * 86       87      4.598
- * 87       88      4.545
- * 88       89      4.494
- * 89       90      4.444
- * 90       91      4.396
- * 91       92      4.348
- * 92       93      4.301
- * 93       94      4.255
- * 94       95      4.211
- * 95       96      4.167
- * 96       97      4.124
- * 97       98      4.082
- * 98       99      4.040
- * 99       100     4.000
- * 100      101     3.960
- * 101      102     3.922
- * 102      103     3.883
- * 103      104     3.846
- * 104      105     3.810
- * 105      106     3.774
- * 106      107     3.738
- * 107      108     3.704
- * 108      109     3.670
- * 109      110     3.636
- * 110      111     3.604
- * 111      112     3.571
- * 112      113     3.540
- * 113      114     3.509
- * 114      115     3.478
- * 115      116     3.448
- * 116      117     3.419
- * 117      118     3.390
- * 118      119     3.361
- * 119      120     3.333
- * 120      121     3.306
- * 121      122     3.279
- * 122      123     3.252
- * 123      124     3.226
- * 124      125     3.200
- * 125      126     3.175
- * 126      127     3.150
- * 127      128     3.125
- *
- * @param freqMHz variable used to get  the correct SYSDIV2
- */
+#include "pll.h"
 
 /* Private Defines ---------------------------------------------------------------------------------*/
 #ifndef NULL
@@ -189,14 +37,9 @@
 //TM4C123GH6PM FIELDS in the SYSCTL_RIS register
 #define SYSCTL_RIS_PLLLRIS      0x00000040  // PLL Lock Raw Interrupt Status
 
-
-#define PLL_LOCK_TIMEOUT_MS     1000
-#define SYSCLK_16MHZ            16000000UL
-
 /* Private Function Prototypes ---------------------------------------------------------------------*/
-static PLL_Status_t PLL_InitHardware(PLL_Handle_t *handle);
+static PLL_Status_t PLL_InitHardware(PLL_Frequency_t frequency);
 static uint32_t PLL_CalculateFrequency(uint32_t frequency_MHz);
-static bool PLL_IsValidHandle(const PLL_Handle_t *handle);
 static bool PLL_IsValidFrequency(uint32_t frequency_MHz);
 
 /* Private Implementation --------------------------------------------------------------------------*/
@@ -207,9 +50,9 @@ static bool PLL_IsValidFrequency(uint32_t frequency_MHz);
  * @param frequency Desired frequency in MHz
  * @return PLL_Status_t Status of the initialization
  */
-PLL_Status_t PLL_Init(PLL_Handle_t *handle, PLL_Frequency_t frequency)
+PLL_Status_t PLL_Init(PLL_Frequency_t frequency)
 {
-    if(!handle || !frequency) {
+    if(!frequency) {
         return PLL_STATUS_INVALID_PARAM;
     }
 
@@ -217,15 +60,9 @@ PLL_Status_t PLL_Init(PLL_Handle_t *handle, PLL_Frequency_t frequency)
         return PLL_STATUS_INVALID_PARAM;
     }
 
-    // Initialize handle
-    handle->frequency = frequency;
-    handle->usePLL = false;
-
     // Initialize hardware
-    PLL_Status_t status = PLL_InitHardware(handle);
-    if(status == PLL_STATUS_SUCCESS) {
-        handle->usePLL = true;
-    }
+    PLL_Status_t status = PLL_InitHardware(frequency);
+    
     return status;
 }
 
@@ -236,9 +73,9 @@ PLL_Status_t PLL_Init(PLL_Handle_t *handle, PLL_Frequency_t frequency)
  * @return PLL_Status_t Status of the initialization
  *
  */
-/*static PLL_Status_t PLL_InitHardware(PLL_Handle_t *handle)
+static PLL_Status_t PLL_InitHardware(PLL_Frequency_t frequency)
 {
-    if(!PLL_IsValidHandle(handle)) {
+    if(!PLL_IsValidFrequency(frequency)) {
         return PLL_STATUS_INVALID_PARAM;
     }
     // 0: Configure the system to use RCC2 for advanced features
@@ -254,7 +91,7 @@ PLL_Status_t PLL_Init(PLL_Handle_t *handle, PLL_Frequency_t frequency)
     // 3: Activate the PLL by clearing PWRDN.
     SYSCTL_RCC2_R &= ~SYSCTL_RCC2_PWRDN2;
     // 4: Set the desired system divider and the system clock to use the PLL.
-    uint32_t pll_sysdiv2 = PLL_CalculateFrequency(handle->frequency);
+    uint32_t pll_sysdiv2 = PLL_CalculateFrequency(frequency);
     SYSCTL_RCC2_R |= SYSCTL_RCC2_DIV400; // Use 400 MHz PLL
     SYSCTL_RCC2_R = (SYSCTL_RCC2_R & ~0X1FC00000)   //Clear system clock divider field
                     + (pll_sysdiv2 << 22);          // Configure for desired system clock
@@ -263,73 +100,8 @@ PLL_Status_t PLL_Init(PLL_Handle_t *handle, PLL_Frequency_t frequency)
     // 6: Enable use of PLL by clearing BYPASS.
     SYSCTL_RCC2_R &= ~SYSCTL_RCC2_BYPASS2;
     return PLL_STATUS_SUCCESS;
-}*/
-static PLL_Status_t PLL_InitHardware(PLL_Handle_t *handle)
-{
-    if(!PLL_IsValidHandle(handle)) {
-        return PLL_STATUS_INVALID_PARAM;
-    }
-    // 0: Configure the system to use RCC2 for advanced features
-    //   such as 400 MHz PLL and non-integer system clock dividers.
-    SYSCTL_RCC2_R |= SYSCTL_RCC2_USERCC2;
-    // 1: Bypass the PLL while initializing.
-    SYSCTL_RCC2_R |= SYSCTL_RCC2_BYPASS2;
-    // 2: Select the crystal value and oscillator source.
-    SYSCTL_RCC_R &= ~SYSCTL_RCC_XTAL_M;
-    SYSCTL_RCC_R += SYSCTL_RCC_XTAL_16MHZ;
-    SYSCTL_RCC2_R &= ~SYSCTL_RCC2_OSCSRC2_M;
-    SYSCTL_RCC2_R += SYSCTL_RCC2_OSCSRC2_MO;
-    // 3: Activate the PLL by clearing PWRDN.
-    SYSCTL_RCC2_R &= ~SYSCTL_RCC2_PWRDN2;
-    // 4: Set the desired system divider and the system clock to use the PLL.
-    uint32_t pll_sysdiv2 = PLL_CalculateFrequency(handle->frequency);
-
-    // Validate sysdiv2
-    if(pll_sysdiv2 > 0x1F)
-    {
-        return PLL_STATUS_FREQ_OUT_OF_RANGE;
-    }
-
-    SYSCTL_RCC2_R |= SYSCTL_RCC2_DIV400; // Use 400 MHz PLL
-    SYSCTL_RCC2_R = (SYSCTL_RCC2_R & ~0X1FC00000)   //Clear system clock divider field
-                    + (pll_sysdiv2 << 22);          // Configure for desired system clock
-    //SYSCTL_RCC2_R = (SYSCTL_RCC2_R & ~(0x1F << 22)) | (pll_sysdiv2 << 22);
-
-    // 5: Wait for the PLL to lock by polling the PLLLRIS bit in the Raw Interrupt Status register.
-    uint32_t timeout_cycles = (PLL_LOCK_TIMEOUT_MS * SYSCLK_16MHZ) / 1000UL;
-    uint32_t wait_count = 0;
-
-    while(((SYSCTL_RIS_R & SYSCTL_RIS_PLLLRIS) == 0) && (wait_count < timeout_cycles))
-    {
-        wait_count++;
-    }
-    if(wait_count >= timeout_cycles)
-    {
-        return PLL_STATUS_LOCK_TIMEOUT;
-    }
-    // 6: Enable use of PLL by clearing BYPASS.
-    SYSCTL_RCC2_R &= ~SYSCTL_RCC2_BYPASS2;
-
-    // 7: Verify PLL is driving system clock
-    uint32_t rcc2_snap = SYSCTL_RCC2_R;
-    if((rcc2_snap & SYSCTL_RCC2_BYPASS2) != 0)
-    {
-       return PLL_STATUS_BYPASS_NOT_CLEARED;
-    }
-    return PLL_STATUS_SUCCESS;
 }
 
-/**
- * @brief Validate PLL handle
- *
- * @param handle Pointer to PLL handle to validate
- * @return true if handle is valid, false otherwise
- *
- */
-static bool PLL_IsValidHandle(const PLL_Handle_t *handle)
-{
-    return handle != NULL;
-}
 
 /**
  * @brief Validate PLL frequency
@@ -382,7 +154,6 @@ uint32_t PLL_GetFrequency(void)
 {
     //Get the current value of the SYSDIV2 field
     uint32_t sysdiv2 = (SYSCTL_RCC2_R & 0x1FC00000) >> 22;
-    //uint32_t sysdiv2 = (SYSCTL_RCC2_R & (0x1F << 22)) >> 22;
     //Calculate the current frequency of the PLL
     return (uint32_t)(400U / (sysdiv2 + 1U));
 }
@@ -391,7 +162,7 @@ uint32_t PLL_GetFrequency(void)
  * @brief Provide a blocking delay in milliseconds
  *
  * @param ms Number of milliseconds to delay
- *
+ * 
  */
  void delay_ms(uint32_t ms)
  {
@@ -431,3 +202,4 @@ const PLL_Interface_t PLL_API = {
     .getPLLFrequency = PLL_GetFrequency,
     .delayMs = delay_ms
 };
+

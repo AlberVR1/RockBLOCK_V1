@@ -13,12 +13,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include "pll.h"
-#include "gpio.h"
-#include "UART.h"
-#include "SysTick.h"
 /* Definitions -------------------------------------------------------------------------------------*/
-#define RB_BUFFER_SIZE 50
+#define RB_BUFFER_SIZE 200
 //#define AT "AT\r"
 //#define ATE0 "ATE0\r"
 //#define AT_K0 "AT&K0\r"
@@ -152,6 +148,8 @@ typedef enum {
     RB_STATUS_NO_SIGNAL,
     RB_STATUS_INQUIRING_MESSAGE,
     RB_STATUS_MESSAGE_SENT,
+    RB_STATUS_MESSAGE_SENT_AND_MESSAGE_RECEIVED,
+    RB_STATUS_MESSAGE_SENT_AND_MESSAGE_RECEIVED_WITH_QUEUE,
     RB_STATUS_MESSAGE_NO_SENT,
     RB_STATUS_SENDING_MESSAGE,
     RB_STATUS_MESSAGE_RECEIVED,
@@ -183,12 +181,6 @@ typedef enum {
 
 /* Public Structures -------------------------------------------------------------------------------*/
 typedef struct {
-    PLL_Frequency_t mcu_frequency;
-    UART_BaudRate_t mastermcu_baudRate_communication;       ///< Baud rate for set communication with master mcu
-    //bool is_initialized; // Init flag
-}RB_Config_t;
-
-typedef struct {
     uint8_t RBDataRaw[RB_BUFFER_SIZE];  // Circular buffer for raw data
     uint16_t head;  // Index for writing new data
     uint16_t tail;  // Index for reading data
@@ -205,6 +197,8 @@ typedef struct {
     uint8_t mt_queued;  // Is the message terminated quantity that are in queue in the GSS to be send to ISU.
     uint8_t signal_quality; // Signal quality
     RB_Status_t RockBLOCK_Status;   // Status of the RockBLOCK9602 module
+    RB_Status_t MESSAGE_SENT;
+    RB_Status_t MESSAGE_RECEIVED;
 }RB_Data_t;
 
 /* Public Function Pointers Structure --------------------------------------------------------------*/
@@ -212,29 +206,15 @@ typedef struct {
  * @brief RockBLOCK Interface structure containing all API functions
  */
 typedef struct {
-    RB_Status_t (*init)( const RB_Config_t *config);
+    RB_Status_t (*init)(void);
     RB_Status_t (*get_signal_strength)(uint8_t *level);
-    RB_Status_t (*send_message)(uint8_t *mo_status,
-                                uint16_t *momsn,
-                                uint8_t *mt_status,
-                                uint16_t *mtmsn,
-                                uint16_t *mt_length,
-                                uint8_t *mt_queued,
+    RB_Status_t (*send_message)(RB_Data_t *data,
                                 const char *msg);
-    RB_Status_t (*send_long_message)(uint8_t *mo_status,
-                                uint16_t *momsn,
-                                uint8_t *mt_status,
-                                uint16_t *mtmsn,
-                                uint16_t *mt_length,
-                                uint8_t *mt_queued,
-                                const char *msg);
-    RB_Status_t (*receive_check)(uint8_t *mo_status,
-                                uint16_t *momsn,
-                                uint8_t *mt_status,
-                                uint16_t *mtmsn,
-                                uint16_t *mt_length,
-                                uint8_t *mt_queued,
-                                char *msg);
+    RB_Status_t (*send_long_message)(RB_Data_t *data,
+                                const char *msg1,
+                                uint8_t *msg2);
+    RB_Status_t (*receive_check)(RB_Data_t *data,
+                                uint8_t *msg);
     RB_Status_t (*waiting_message)(void);
     RB_Status_t (*wakeup)(void);
     RB_Status_t (*sleep)(void);

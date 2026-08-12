@@ -1,20 +1,22 @@
 /*
- * mastercommands.h
+ * mastercommunication.h
  *
- *  Created on: 17 jun 2026
+ *  Created on: 7 ago 2026
  *      Author: Control1
  */
 
-#ifndef INCLUDE_MASTERCOMMANDS_H_
-#define INCLUDE_MASTERCOMMANDS_H_
+#ifndef INCLUDE_MASTERCOMMUNICATION_H_
+#define INCLUDE_MASTERCOMMUNICATION_H_
 
-#include <stdint.h>
+
 
 #define MASTER_FRAME_SIZE 340U
 
 typedef enum
 {
-    MASTER_START_MISSION = 0,
+    MASTER_NEW_MISSION = 0,
+    MASTER_CONTINUE_MISSION  =1,
+    MASTER_HOLD_COMMUNICATION_WITH_GCS = 2,
     WAIT_FOR_RBMESSAGE,
     MASTER_SEND_MESSAGE,
     MASTER_RECEIVE_MESSAGE,
@@ -23,7 +25,7 @@ typedef enum
 
 /**
  *  @brief Master Commands header file - Contains definitions and structures for master commands
- *  
+ *
  * This enum is used to identify the frame received by master MCU
  *
 **/
@@ -34,7 +36,7 @@ typedef enum
     RX_PAYLOAD
 }u1_rx_state_t;
 
-/** 
+/**
  * @brief structure used to store the context of the reception of a command from master MCU
  *
  * This structure is used to store the state of the reception of a command from master MCU,
@@ -81,6 +83,10 @@ typedef struct
     uint8_t buffer_to_receive[MASTER_FRAME_SIZE];
 }UART1_frame_to_send_t;
 
-
-
-#endif /* INCLUDE_MASTERCOMMANDS_H_ */
+typedef struct
+{
+    void (*mainconf)(void);
+    void (*SendMaster)(const char *str, uint32_t str_len);
+}u1_master_t;
+extern const u1_master_t master_TM4;
+#endif /* INCLUDE_MASTERCOMMUNICATION_H_ */
