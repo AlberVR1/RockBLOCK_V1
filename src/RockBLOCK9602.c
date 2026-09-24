@@ -348,10 +348,13 @@ RB_Status_t RB_send__long_message(RB_Data_t *data,
         }
     }
 
+    // Flag to check if a command is not send (sending)
+    rb_dev.isatcommandsent = ATCOMMAND_SENDING;
+
     // clear buffer and send AT+SBDD0 command to clear the SBD buffer-> MO (Mobile Originated) buffer
     tries = 0;
     do {
-        rb_dev.at_response_received = RB_Send_AT_SBDD0_Command(900); // Wait for response with a timeout of 900 ms
+        rb_dev.at_response_received = RB_Send_AT_SBDD0_Command(5000); // Wait for response with a timeout of 900 ms
         if(rb_dev.at_response_received == RB_AT_SBDD0_COMMAND_RESPONSE_RECEIVED_SUCCESS) {
             break;
         }
@@ -378,7 +381,7 @@ RB_Status_t RB_send__long_message(RB_Data_t *data,
     // Send message to ISU -> MO (Mobile Originated) buffer
     tries = 0;
     do {
-        rb_dev.at_response_received = RB_Send_AT_SBDWT_Command(1,msg1, 900); // Wait for response with a timeout of 900 ms
+        rb_dev.at_response_received = RB_Send_AT_SBDWT_Command(1,msg1, 5000); // Wait for response with a timeout of 900 ms
         if(rb_dev.at_response_received == RB_AT_SBDWT_COMMAND_RESPONSE_RECEIVED_SUCCESS) {
             break;
         }
@@ -408,6 +411,8 @@ RB_Status_t RB_send__long_message(RB_Data_t *data,
     }while(tries<=3);
     // It's neccesary clear main buffer to wait a mmesage in queue
     clearBuffer();
+    // Flag to check if a command is not send
+    rb_dev.isatcommandsent = ATCOMMAND_NOSENT;
     switch(rb_dev.at_response_received) {
         case RB_AT_SBDIX_COMMAND_RESPONSE_RECEIVED_ERROR:
             return RB_STATUS_ERROR;
@@ -418,7 +423,7 @@ RB_Status_t RB_send__long_message(RB_Data_t *data,
     if(data->mo_status<=2) {
         if(data->mt_status == 1) {
 
-            rb_dev.at_response_received = RB_Send_AT_SBDRT_Command(msg2, 900); // Wait for response with a timeout of 900 ms
+            rb_dev.at_response_received = RB_Send_AT_SBDRT_Command(msg2, 5000); // Wait for response with a timeout of 900 ms
 
             // It's neccesary clear main buffer to wait a mmesage in queue
             clearBuffer();
@@ -468,10 +473,12 @@ RB_Status_t RB_receive_check(RB_Data_t *data,
         }
     }
 
+    // Flag to check if a command is not send (sending)
+    rb_dev.isatcommandsent = ATCOMMAND_SENDING;
     // clear buffer and send AT+SBDD0 command to clear the SBD buffer-> MO (Mobile Originated) buffer
     tries = 0;
     do {
-        rb_dev.at_response_received = RB_Send_AT_SBDD0_Command(20000); // Wait for response with a timeout of 900 ms
+        rb_dev.at_response_received = RB_Send_AT_SBDD0_Command(900); // Wait for response with a timeout of 900 ms
         if(rb_dev.at_response_received == RB_AT_SBDD0_COMMAND_RESPONSE_RECEIVED_SUCCESS) {
             break;
         }
@@ -512,6 +519,8 @@ RB_Status_t RB_receive_check(RB_Data_t *data,
         }
         tries++;
     }while(tries<= 3);
+    // Flag to check if a command is not send (sending)
+    rb_dev.isatcommandsent = ATCOMMAND_SENDING;
     // It's neccesary clear main buffer to wait a mmesage in queue
     clearBuffer();
     switch(rb_dev.at_response_received) {
@@ -526,10 +535,15 @@ RB_Status_t RB_receive_check(RB_Data_t *data,
     //}
     if(data->mt_status == 1)
     {
-        rb_dev.at_response_received = RB_Send_AT_SBDRT_Command(msg, 20000); // Wait for response with a timeout of 900 ms
+        // Flag to check if a command is not send (sending)
+        rb_dev.isatcommandsent = ATCOMMAND_SENDING;
+        rb_dev.at_response_received = RB_Send_AT_SBDRT_Command(msg, 900); // Wait for response with a timeout of 900 ms
         
         // It's neccesary clear main buffer to wait a mmesage in queue
         clearBuffer();
+
+        // Flag to check if a command is not send
+        rb_dev.isatcommandsent = ATCOMMAND_NOSENT;
 
         switch(rb_dev.at_response_received) {
             case RB_AT_SBDRT_COMMAND_RESPONSE_RECEIVED_ERROR:
@@ -597,6 +611,8 @@ static RB_Response_t RB_Configuring_Commands(void)
     if(pinstatus != RB_WAKEUP_OK) {
         return pinstatus;
     }
+    // Flag to check if a command is not send (sending)
+    rb_dev.isatcommandsent = ATCOMMAND_SENDING;
 
     // Send AT command to check if module is responsive
     rb_dev.at_response_received = RB_Send_AT_Command(900); // Wait for response with a timeout of 900 ms
@@ -607,6 +623,9 @@ static RB_Response_t RB_Configuring_Commands(void)
         return rb_dev.at_response_received; // Return error if expected response is not received
     }
     SYSTICK_API.delay_ms(1000);
+
+    // Flag to check if a command is not send (sending)
+    rb_dev.isatcommandsent = ATCOMMAND_NOSENT;
 
     /*// Send AT&K0 command to set flow control to none
     rb_dev.at_response_received = RB_Send_ATK0_Command(900); // Wait for response with a timeout of 5000 ms
@@ -634,6 +653,7 @@ static RB_Response_t RB_Configuring_Commands(void)
     if(rb_dev.at_response_received != RB_ATY0_COMMAND_RESPONSE_RECEIVED_SUCCESS) {
         return rb_dev.at_response_received; // Return error if expected response is not received
     }*/
+
     return rb_dev.at_response_received =RB_AT_COMMANDS_FOR_CONFIGURATION_RECEIVED_SUCCESS; // Return success if all commands were sent without issues
 }
 
@@ -1026,7 +1046,7 @@ static RB_Response_t RB_Send_AT_SBDRT_Command(uint8_t *buff, uint32_t timeout_ms
         if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_SBDRT))
         {
             SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
-            SYSTICK_API.delay_ms(50);
+            SYSTICK_API.delay_ms(200);
             break;
         }
         getmilis = SYSTICK_API.milis();
@@ -1156,7 +1176,7 @@ static void getString(uint8_t *buff, const uint8_t start_delimiter, const uint8_
     while(str[pos] != start_delimiter && str[pos] != '\0') { //Check for the start delimiter
         pos++;
     }
-    pos += 2;
+    pos += 3;
     while(str[pos] != end_delimiter && str[pos] != '\0') { //Check for the end delimiter
         buff[index++] = str[pos++];
     }
@@ -1389,6 +1409,10 @@ void rb_callback(uint8_t data)
         rb_dev.head = (rb_dev.head + 1) % RB_BUFFER_SIZE;
         rb_dev.count++;
     }
+    /*if(rb_dev.isatcommandsent == ATCOMMAND_NOSENT && rb_dev.count > 100)
+    {
+        rb_dev.count = 0;
+    }*/
 }
 
 

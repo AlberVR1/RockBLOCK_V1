@@ -14,13 +14,19 @@
 #include <stdbool.h>
 #include <string.h>
 /* Definitions -------------------------------------------------------------------------------------*/
-#define RB_BUFFER_SIZE 200
+#define RB_BUFFER_SIZE 500
 //#define AT "AT\r"
 //#define ATE0 "ATE0\r"
 //#define AT_K0 "AT&K0\r"
 
 
 /* Public Enums ------------------------------------------------------------------------------------*/
+
+typedef enum
+{
+    ATCOMMAND_SENDING,
+    ATCOMMAND_NOSENT
+}AT_Commandsent_t;
 
 typedef enum {
     AT_COMMAND_AT = 0,
@@ -186,6 +192,7 @@ typedef struct {
     uint16_t tail;  // Index for reading data
     uint16_t count; // Number of bytes currently in buffer
     RB_Response_t at_response_received;
+    AT_Commandsent_t isatcommandsent;       // Set when a command is sent, clear when a response is received or timeout.
 }ROCKBLOCK_Device_t;
 
 typedef struct {
