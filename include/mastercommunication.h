@@ -18,10 +18,12 @@ typedef enum
     MASTER_NEW_MISSION = 0,
     MASTER_CONTINUE_MISSION  =1,
     MASTER_HOLD_COMMUNICATION_WITH_GCS = 2,
-    WAIT_FOR_RBMESSAGE,
-    MASTER_SEND_MESSAGE,
-    MASTER_RECEIVE_MESSAGE,
-    NO_ACTION
+    RETREIVE_GLIDER_WAIT = 3,
+    WITOUT_ANSWER_GLIDER = 4,
+    COMMAND_UNKNOWED_GLIDER = 5,
+    WAIT_FOR_RBMESSAGE = 6,
+    DOWNLOAD_RB_MESSAGE = 7,
+    NO_ACTION = 8
 }main_commands_t;
 
 /**
@@ -44,9 +46,16 @@ typedef enum
 typedef enum
 {
     NO_MESSAGE_NEW = 0,
-    NEW_MESSAGE = 1,
-    TRANSFER_MESSAGE = 2,
-    CHECK_QUEUE_MESSAGES = 3
+    NEW_MISSION = 1,
+    CONTINUE_MISSION = 2,
+    HOLD_COMMUNICATION = 3,
+    RETREIVE_GLIDER = 4,
+    WITOUT_ANSWER = 5,
+    COMMAND_UNKNOWED = 6,
+    TRANSFER_MESSAGE = 7,
+    WAKEUP = 8,
+    DOWNLOAD_MESSAGE = 9,
+    CHECK_QUEUE_MESSAGES = 10
 }Master_Status_t;
 
 /**
@@ -99,6 +108,7 @@ typedef struct
 {
     uint8_t buffer_to_send[MASTER_FRAME_SIZE];
     uint8_t buffer_to_receive[MASTER_FRAME_SIZE];
+    uint8_t buffer_to_send_master[MASTER_FRAME_SIZE];
     Master_Status_t new_message;
 }UART1_frame_to_send_t;
 
@@ -111,8 +121,10 @@ typedef struct
 typedef struct
 {
     void (*mainconf)(void);
-    void (*SendMaster)(const uint8_t *str, uint32_t str_len);
-    Master_Status_t (*ReadStatus)(void);
+    void (*SendStringMaster)(const char *str, uint32_t str_len);
+    void (*SendByteMaster)(uint8_t data);
+    Master_Status_t (*ReadStatus)(uint8_t *buffer);
+    uint32_t (*getstringsize)(const uint8_t *str1);
 }u1_master_t;
 
 /**

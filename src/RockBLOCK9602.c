@@ -13,6 +13,7 @@
 #include "gpio.h"
 #include "UART.h"
 #include "SysTick.h"
+#include <string.h>
 
 
 
@@ -354,7 +355,7 @@ RB_Status_t RB_send__long_message(RB_Data_t *data,
     // clear buffer and send AT+SBDD0 command to clear the SBD buffer-> MO (Mobile Originated) buffer
     tries = 0;
     do {
-        rb_dev.at_response_received = RB_Send_AT_SBDD0_Command(5000); // Wait for response with a timeout of 900 ms
+        rb_dev.at_response_received = RB_Send_AT_SBDD0_Command(900); // Wait for response with a timeout of 900 ms
         if(rb_dev.at_response_received == RB_AT_SBDD0_COMMAND_RESPONSE_RECEIVED_SUCCESS) {
             break;
         }
@@ -381,7 +382,7 @@ RB_Status_t RB_send__long_message(RB_Data_t *data,
     // Send message to ISU -> MO (Mobile Originated) buffer
     tries = 0;
     do {
-        rb_dev.at_response_received = RB_Send_AT_SBDWT_Command(1,msg1, 5000); // Wait for response with a timeout of 900 ms
+        rb_dev.at_response_received = RB_Send_AT_SBDWT_Command(1,msg1, 900); // Wait for response with a timeout of 900 ms
         if(rb_dev.at_response_received == RB_AT_SBDWT_COMMAND_RESPONSE_RECEIVED_SUCCESS) {
             break;
         }
@@ -423,7 +424,7 @@ RB_Status_t RB_send__long_message(RB_Data_t *data,
     if(data->mo_status<=2) {
         if(data->mt_status == 1) {
 
-            rb_dev.at_response_received = RB_Send_AT_SBDRT_Command(msg2, 5000); // Wait for response with a timeout of 900 ms
+            rb_dev.at_response_received = RB_Send_AT_SBDRT_Command(msg2, 900); // Wait for response with a timeout of 900 ms
 
             // It's neccesary clear main buffer to wait a mmesage in queue
             clearBuffer();
@@ -1046,7 +1047,7 @@ static RB_Response_t RB_Send_AT_SBDRT_Command(uint8_t *buff, uint32_t timeout_ms
         if(at_response_contains(rb_dev.RBDataRaw, AT_RESPONSE_SBDRT))
         {
             SYSTICK_API.Stop_Count(); // Stop SysTick after waiting
-            SYSTICK_API.delay_ms(200);
+            SYSTICK_API.delay_ms(500);
             break;
         }
         getmilis = SYSTICK_API.milis();
@@ -1266,13 +1267,13 @@ static void clearBuffer(void)
 {
     uint32_t i = 0;
     // Clear main buffer
-    if((rb_dev.RBDataRaw[0] != '\0') && (rb_dev.RBDataRaw[1] != '\0'))
-    {
+    //if((rb_dev.RBDataRaw[0] != '\0') && (rb_dev.RBDataRaw[1] != '\0'))
+    //{
         for(i=0; i<rb_dev.count; i++) {
             rb_dev.RBDataRaw[i] = '\0'; // Clear buffer data
         }
         rb_dev.head = rb_dev.tail = rb_dev.count = 0; // Reset circular buffer
-    }
+    //}
 }
 
 /**

@@ -12,7 +12,6 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <string.h>
 /* Definitions -------------------------------------------------------------------------------------*/
 #define RB_BUFFER_SIZE 500
 //#define AT "AT\r"

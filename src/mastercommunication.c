@@ -9,10 +9,17 @@
 #include "functions.h"
 #include "UART.h"
 #include "mastercommunication.h"
+#include <string.h>
 
 
-
-static UART_Status_t Configure_UART_1(void);
+const char NEWMISSION[] = "$RB_I,NM";
+const char CONTINUEMISSION[] = "$RB_I,CM";
+const char HOLDCOMMUNICATION[] = "$RB_I,HC";
+const char RETRIEVEGLIDER[] = "$RB_I,RG";
+const char WITOUTANSWER[] = "$RB_I,WA";
+const char TRANSFERMESSAGE[] = "$TRANSFER_";
+const char WAKEUP_RB[] = "$WAKEUP_";
+const char DOWNLOAD_MESSAGE_RB[] = "DOWNLOAD_";
 
 void master_callback(uint8_t data);
 
@@ -33,13 +40,17 @@ UART1_frame_manager_t frame_mgr_mstr = {
 };
 
 
+static int frame_response_contains(const uint8_t *buff, const char *expected);
+static UART_Status_t Configure_UART_1(void);
+
+
 
 void uart1_main_configure(void)
 {
     uint32_t i;
     for(i=0;i<MASTER_FRAME_SIZE;i++)
     {
-        frame_mgr_mstr.buffer_a.frame[i] = '\0';
+        frame_mgr_mstr.buffer_a. frame[i] = '\0';
         frame_mgr_mstr.buffer_b.frame[i] = '\0';
     }
 
@@ -83,14 +94,51 @@ static UART_Status_t Configure_UART_1(void)
  * @brief
  *
  */
-Master_Status_t Master_ReadStatus(void)
+Master_Status_t Master_ReadStatus(uint8_t *buffer)
 {
     Master_Status_t status;
     uint32_t i;
-    uint8_t data;
     if(frame_mgr_mstr.p_read->frame[0] == 0x24)
     {
-        data = frame_mgr_mstr.p_read->frame[1]; // 0x24 = $
+        if(frame_response_contains(frame_mgr_mstr.p_read->frame, NEWMISSION))
+        {
+            status  = NEW_MISSION;
+        }
+        else if(frame_response_contains(frame_mgr_mstr.p_read->frame, CONTINUEMISSION))
+        {
+            status = CONTINUE_MISSION;
+        }
+        else if(frame_response_contains(frame_mgr_mstr.p_read->frame, HOLDCOMMUNICATION))
+        {
+            status = HOLD_COMMUNICATION;
+        }
+        else if(frame_response_contains(frame_mgr_mstr.p_read->frame, RETRIEVEGLIDER))
+        {
+            status = RETREIVE_GLIDER;
+        }
+        else if(frame_response_contains(frame_mgr_mstr.p_read->frame, WITOUTANSWER))
+        {
+            status = WITOUT_ANSWER;
+        }
+        else if(frame_response_contains(frame_mgr_mstr.p_read->frame, TRANSFERMESSAGE))
+        {
+            status = TRANSFER_MESSAGE;
+        }
+        else if(frame_response_contains(frame_mgr_mstr.p_read->frame, WAKEUP_RB))
+        {
+            status = WAKEUP;
+        }
+        else if(frame_response_contains(frame_mgr_mstr.p_read->frame, DOWNLOAD_MESSAGE_RB))
+        {
+            status = DOWNLOAD_MESSAGE;
+        }
+        else
+        {
+            status = COMMAND_UNKNOWED;
+        }
+        memcpy(buffer,frame_mgr_mstr.p_read->frame,MASTER_FRAME_SIZE);
+
+        /*data = frame_mgr_mstr.p_read->frame[1]; // 0x24 = $
         switch(data)
         {
         case 0x52:  // 0x52 = R
@@ -101,7 +149,7 @@ Master_Status_t Master_ReadStatus(void)
             break;
         default:    // Command unauthorized
             break;
-        }
+        }*/
     }
     else    // 0x00 = NULL
     {
@@ -120,9 +168,33 @@ Master_Status_t Master_ReadStatus(void)
  * @brief Send string to mcu master
  *
  */
-void SendtoMaster(const uint8_t *str, uint32_t str_len)
+void SendStringtoMaster(const char *str, uint32_t str_len)
 {
-    UART_API.sendString(&uart1_handle, (const char*)str, str_len);
+    UART_API.sendString(&uart1_handle, str, str_len);
+}
+/**
+ * @brief
+ *
+ */
+void SendByteToMaster(uint8_t data)
+{
+    UART_API.sendByte(&uart1_handle, data);
+}
+
+uint32_t getsizeofstring(const uint8_t *str1)
+{
+    uint32_t i;
+    for(i=0;str1[i] != 0x00;i++);
+    return i;
+}
+
+/*
+ * @brief
+ *
+ */
+static int frame_response_contains(const uint8_t *buff, const char *expected)
+{
+    return strstr((const char*)buff, expected) != NULL;
 }
 
 /**
@@ -144,7 +216,7 @@ void master_callback(uint8_t data)
             break;
         case SYNC_1:
             // Handle SYNC_1 state
-            if(data == 0x52)    // 'R'
+            if(data == 0x44 || data == 0x52 || data == 0x54 || data == 0x57)    // 'D', 'R', 'T' and 'W'
             {
                 frame_mgr_mstr.p_write->frame[1] = data; // Store the first byte of the frame
                 rx_cntxt_mstr.index = 2; // Move to the next index for the next byte
@@ -201,8 +273,10 @@ void master_callback(uint8_t data)
 
 extern const u1_master_t master_TM4 = {
                           .mainconf = uart1_main_configure,
-                          .SendMaster = SendtoMaster,
+                          .SendStringMaster = SendStringtoMaster,
+                          .SendByteMaster = SendByteToMaster,
                           .ReadStatus = Master_ReadStatus,
+                          .getstringsize = getsizeofstring,
 };
 
 
