@@ -114,6 +114,9 @@ RB_Status_t RB_init(void)
 {
 
     UART_Status_t statusuart2 = Configure_UART_2();
+    if(statusuart2 != UART_STATUS_SUCCESS) {
+        return RB_STATUS_HW_ERROR;
+    }
 
     // Configure GPIO 
     GPIO_Status_t status_gpio = Configure_RB_GPIO();
@@ -1375,8 +1378,8 @@ static UART_Status_t Configure_UART_2(void)
     if(statusuart2 != UART_STATUS_SUCCESS) {
         return statusuart2;
     }
-    UART_API.enableInterrupt(&uart2_handle,UART_FIFO_LEVEL_1_8, rb_callback);
-    return UART_STATUS_SUCCESS;
+    statusuart2 = UART_API.enableInterrupt(&uart2_handle, UART_FIFO_LEVEL_1_8, rb_callback);
+    return statusuart2;
 }
 
 

@@ -8,9 +8,11 @@
 #ifndef INCLUDE_MASTERCOMMUNICATION_H_
 #define INCLUDE_MASTERCOMMUNICATION_H_
 
+#include "UART.h"
 
 
 #define MASTER_FRAME_SIZE 340U
+#define MASTER_MAX_FRAME_SIZE 200U  // Includes the '$' start and '#' end markers.
 
 
 typedef enum
@@ -24,7 +26,8 @@ typedef enum
     WAIT_FOR_RBMESSAGE = 6,
     DOWNLOAD_RB_MESSAGE = 7,
     WAKEUP_NOW = 8,
-    NO_ACTION = 9
+    GET_SIGNAL_QUALITY_NOW = 9,
+    NO_ACTION = 10
 }main_commands_t;
 
 /**
@@ -37,7 +40,8 @@ typedef enum
 {
     SYNC_0 = 0,
     SYNC_1,
-    RX_PAYLOAD
+    RX_PAYLOAD,
+    RX_DISCARD
 }u1_rx_state_t;
 
 /**
@@ -56,7 +60,8 @@ typedef enum
     TRANSFER_MESSAGE = 7,
     WAKEUP = 8,
     DOWNLOAD_MESSAGE = 9,
-    CHECK_QUEUE_MESSAGES = 10
+    CHECK_QUEUE_MESSAGES = 10,
+    GET_SIGNAL_QUALITY = 11
 }Master_Status_t;
 
 /**
@@ -69,7 +74,7 @@ typedef enum
 typedef struct {
     u1_rx_state_t state;
     uint16_t index;
-    uint32_t timeout_counter;
+    uint16_t frame_length;
 } u1_rx_context_master_t;
 
 /**
@@ -95,8 +100,8 @@ typedef struct
 {
     u1_frame_buffer_t buffer_a;
     u1_frame_buffer_t buffer_b;
-    u1_frame_buffer_t *p_write;
-    u1_frame_buffer_t *p_read;
+    u1_frame_buffer_t * volatile p_write;
+    u1_frame_buffer_t * volatile p_read;
     volatile uint8_t frame_ready;
     volatile uint32_t frame_errors;
 }UART1_frame_manager_t;
@@ -121,7 +126,7 @@ typedef struct
  */
 typedef struct
 {
-    void (*mainconf)(void);
+    UART_Status_t (*mainconf)(void);
     void (*SendStringMaster)(const char *str, uint32_t str_len);
     void (*SendByteMaster)(uint8_t data);
     Master_Status_t (*ReadStatus)(uint8_t *buffer);

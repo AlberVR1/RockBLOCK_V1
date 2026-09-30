@@ -68,9 +68,18 @@
 #include "mastercommunication.h"
 
 /* Private functions prototypes---------------------------------------------------------------------*/
-void configuration(void);
+typedef enum {
+    CONFIGURATION_STATUS_SUCCESS = 0,
+    CONFIGURATION_STATUS_PLL_ERROR,
+    CONFIGURATION_STATUS_SYSTICK_ERROR,
+    CONFIGURATION_STATUS_UART1_ERROR,
+    CONFIGURATION_STATUS_ROCKBLOCK_ERROR
+} Configuration_Status_t;
+
+Configuration_Status_t configuration(void);
 void RB_SendMessage(void);
 void RB_RecieveMessage(void);
+void RB_GetSignalQuality(void);
 void ClearmainBuffer(void);
 
 /* Private global variables-------------------------------------------------------------------------*/
@@ -78,7 +87,6 @@ uint32_t freqqq = 0;
 uint32_t count = 0;
 
 static bool receive_message = false;
-static bool signal_quality = false;
 static RB_Data_t rb_data;
 
 
@@ -95,6 +103,10 @@ const char MESSAGE_RECEIVED[] = "$RB_I,NEW_MESSAGE_RECEIVED#CS";    // When a Me
 const char MESSAGE_RECEIVED_WITH_QUEUE[] = "$RB_I,NEW_MESSAGE_RECEIVED_W_Q#CS";    // When a Message was received and a message in queue exist
 const char SESSION_FAILURE[] = "$RB_I,SESSION_FAILURE#CS";    // When a Message was received
 const char NO_MESSAGES[] = "$RB_I,NO_MESSAGE_EXIST#CS";    // When a Message was received
+const char SIGNAL_STATUS_OK[] = "$RB_I,STATUS_SIGNAL_OK#CS";
+const char SIGNAL_STATUS_NO_SIGNAL[] = "$RB_I,STATUS_NO_SIGNAL#CS";
+const char SIGNAL_STATUS_TIMEOUT[] = "$RB_I,RB_TIMEOUT#CS";
+const char SIGNAL_STATUS_ERROR[] = "$RB_I,STATUS_ERROR#CS";
 
 const char COMMAND_DOESNT_EXIST[] = "$RB_I,COMMAND UNKNOWED#CS";    // Command doesn't exist
 
@@ -113,11 +125,20 @@ UART1_frame_to_send_t u1_frame_send = {
  */
 int main(void)
 {
+    Configuration_Status_t configuration_status;
+
     rb_data.RockBLOCK_Status = RB_STATUS_INITIALIZING;
     rb_data.MESSAGE_SENT = RB_STATUS_OK;
     rb_data.MESSAGE_RECEIVED = RB_STATUS_OK;
     rb_data.signal_qualiity = RB_STATUS_OK;
-    configuration();
+    configuration_status = configuration();
+    if(configuration_status != CONFIGURATION_STATUS_SUCCESS &&
+       configuration_status != CONFIGURATION_STATUS_ROCKBLOCK_ERROR) {
+        rb_data.RockBLOCK_Status = RB_STATUS_HW_ERROR;
+        while(true) {
+            // Essential MCU or master communication setup failed.
+        }
+    }
     while(true)
     {
         if(count<1000)
@@ -154,6 +175,9 @@ int main(void)
                 break;
             case DOWNLOAD_MESSAGE:
                 main_command = DOWNLOAD_RB_MESSAGE;
+                break;
+            case GET_SIGNAL_QUALITY:
+                main_command = GET_SIGNAL_QUALITY_NOW;
                 break;
             default:
                 main_command = WAIT_FOR_RBMESSAGE;
@@ -204,47 +228,28 @@ int main(void)
             RockBLOCK_API.wakeup();
             PLL_API.delayMs(20000);
             break;
+        case GET_SIGNAL_QUALITY_NOW:
+            RB_GetSignalQuality();
+            break;
         }
         if(receive_message)
         {
             receive_message = false;
             RB_RecieveMessage();
         }
-// Send Message to GSS
-        if(signal_quality) {
-            signal_quality = false;
-            rb_data.RockBLOCK_Status = RB_STATUS_GETTING_SIGNAL;
-            rb_data.signal_qualiity = rb_data.RockBLOCK_Status;
-            rb_data.RockBLOCK_Status = RockBLOCK_API.get_signal_strength(&rb_data.signal_quality);
-            rb_data.signal_qualiity = rb_data.RockBLOCK_Status;
-            switch(rb_data.signal_qualiity)
-            {
-            case RB_STATUS_SIGNAL_OK:
-                break;
-            case RB_STATUS_NO_SIGNAL:
-                break;
-            case RB_STATUS_TIMEOUT:
-                break;
-            case RB_STATUS_ERROR:
-                break;
-            default:
-                break;
-            }
-            main_command = WAIT_FOR_RBMESSAGE;
-        }
-
         //master_TM4.SendMaster(u1_frame_send.buffer_to_receive, 47);
         SYSTICK_API.delay_ms(5000);
     }
 }
 
 
-void configuration(void)
+Configuration_Status_t configuration(void)
 {
 
     PLL_Status_t statuspll = PLL_API.init(MHz40);
     // The PLL module initialized correctly
     if(statuspll != PLL_STATUS_SUCCESS) {
+        return CONFIGURATION_STATUS_PLL_ERROR;
     }
     PLL_API.delayMs(200); // Short delay to ensure PLL is stable before proceeding
 
@@ -252,9 +257,13 @@ void configuration(void)
     SYSTICK_Status_t statussystick = SYSTICK_API.init(); // The SysTick module configured correctly
 
     if(statussystick != SYSTICK_STATUS_SUCCESS) {
+        return CONFIGURATION_STATUS_SYSTICK_ERROR;
     }
     // Configure UART1 for MCU main communication
-    master_TM4.mainconf();
+    UART_Status_t status_uart1 = master_TM4.mainconf();
+    if(status_uart1 != UART_STATUS_SUCCESS) {
+        return CONFIGURATION_STATUS_UART1_ERROR;
+    }
 
     // Configure UART2, GPIOS for RockBLOCK
     rb_data.RockBLOCK_Status = RockBLOCK_API.init();
@@ -262,9 +271,12 @@ void configuration(void)
         rb_data.MESSAGE_SENT = rb_data.RockBLOCK_Status;
         rb_data.MESSAGE_RECEIVED = rb_data.RockBLOCK_Status;
         master_TM4.SendStringMaster(RB_TIMEOUT, 14);
+        return CONFIGURATION_STATUS_ROCKBLOCK_ERROR;
     } else {
         master_TM4.SendStringMaster(RB_COMMUNICATION_OK, 9);
     }
+
+    return CONFIGURATION_STATUS_SUCCESS;
 }
 
 void RB_SendMessage(void)
@@ -287,7 +299,7 @@ void RB_SendMessage(void)
         master_TM4.SendStringMaster(MESSAGE_NO_SENT, 22);
         break;
     case RB_STATUS_MESSAGE_SENT_AND_MESSAGE_RECEIVED:
-        master_TM4.SendStringMaster(MESSAGE_SENT_AND_MESSAGE_RECEIVED, 24);
+        master_TM4.SendStringMaster(MESSAGE_SENT_AND_MESSAGE_RECEIVED, 25);
         break;
         // Transmit message to MCU main
     case RB_STATUS_MESSAGE_SENT_AND_MESSAGE_RECEIVED_WITH_QUEUE:
@@ -342,6 +354,32 @@ void RB_RecieveMessage(void)
     }
     rb_data.MESSAGE_RECEIVED = rb_data.RockBLOCK_Status;
     SYSTICK_API.delay_ms(2000);
+    main_command = WAIT_FOR_RBMESSAGE;
+}
+
+void RB_GetSignalQuality(void)
+{
+    rb_data.RockBLOCK_Status = RB_STATUS_GETTING_SIGNAL;
+    rb_data.RockBLOCK_Status = RockBLOCK_API.get_signal_strength(&rb_data.signal_quality);
+
+    switch(rb_data.RockBLOCK_Status)
+    {
+    case RB_STATUS_SIGNAL_OK:
+        master_TM4.SendStringMaster(SIGNAL_STATUS_OK, sizeof(SIGNAL_STATUS_OK) - 1U);
+        break;
+    case RB_STATUS_NO_SIGNAL:
+        master_TM4.SendStringMaster(SIGNAL_STATUS_NO_SIGNAL, sizeof(SIGNAL_STATUS_NO_SIGNAL) - 1U);
+        break;
+    case RB_STATUS_TIMEOUT:
+        master_TM4.SendStringMaster(SIGNAL_STATUS_TIMEOUT, sizeof(SIGNAL_STATUS_TIMEOUT) - 1U);
+        break;
+    case RB_STATUS_ERROR:
+    case RB_STATUS_WAKEUP_ERROR:
+    default:
+        master_TM4.SendStringMaster(SIGNAL_STATUS_ERROR, sizeof(SIGNAL_STATUS_ERROR) - 1U);
+        break;
+    }
+
     main_command = WAIT_FOR_RBMESSAGE;
 }
 
