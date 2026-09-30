@@ -205,6 +205,7 @@ typedef struct {
     RB_Status_t RockBLOCK_Status;   // Status of the RockBLOCK9602 module
     RB_Status_t MESSAGE_SENT;
     RB_Status_t MESSAGE_RECEIVED;
+    RB_Status_t signal_qualiity;
 }RB_Data_t;
 
 /* Public Function Pointers Structure --------------------------------------------------------------*/

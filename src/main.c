@@ -96,6 +96,8 @@ const char MESSAGE_RECEIVED_WITH_QUEUE[] = "$RB_I,NEW_MESSAGE_RECEIVED_W_Q#CS"; 
 const char SESSION_FAILURE[] = "$RB_I,SESSION_FAILURE#CS";    // When a Message was received
 const char NO_MESSAGES[] = "$RB_I,NO_MESSAGE_EXIST#CS";    // When a Message was received
 
+const char COMMAND_DOESNT_EXIST[] = "$RB_I,COMMAND UNKNOWED#CS";    // Command doesn't exist
+
 main_commands_t main_command = WAIT_FOR_RBMESSAGE;
 UART1_frame_to_send_t u1_frame_send = {
     .buffer_to_send = "$RB_I,WA,40.623663,-60.405777,91,1.04,25,45,844.5554,SIGNALOK#CS",
@@ -114,6 +116,7 @@ int main(void)
     rb_data.RockBLOCK_Status = RB_STATUS_INITIALIZING;
     rb_data.MESSAGE_SENT = RB_STATUS_OK;
     rb_data.MESSAGE_RECEIVED = RB_STATUS_OK;
+    rb_data.signal_qualiity = RB_STATUS_OK;
     configuration();
     while(true)
     {
@@ -132,18 +135,22 @@ int main(void)
                 main_command = MASTER_CONTINUE_MISSION;
                 break;
             case HOLD_COMMUNICATION:
+                main_command = MASTER_HOLD_COMMUNICATION_WITH_GCS;
                 break;
             case RETREIVE_GLIDER:
+                main_command = RETREIVE_GLIDER_WAIT;
                 break;
             case WITOUT_ANSWER:
+                main_command = WITOUT_ANSWER_GLIDER;
                 break;
             case COMMAND_UNKNOWED:
+                main_command = COMMAND_UNKNOWED_GLIDER;
                 break;
             case TRANSFER_MESSAGE:
                 master_TM4.SendStringMaster(u1_frame_send.buffer_to_receive, master_TM4.getstringsize(u1_frame_send.buffer_to_receive));
                 break;
             case WAKEUP:
-                main_command = WAIT_FOR_RBMESSAGE;
+                main_command = WAKEUP_NOW;
                 break;
             case DOWNLOAD_MESSAGE:
                 main_command = DOWNLOAD_RB_MESSAGE;
@@ -179,7 +186,8 @@ int main(void)
             RB_SendMessage();
             break;
         case COMMAND_UNKNOWED_GLIDER:
-
+            master_TM4.SendStringMaster(COMMAND_DOESNT_EXIST, 25);
+            main_command = WAIT_FOR_RBMESSAGE;
             break;
         case WAIT_FOR_RBMESSAGE:
             rb_data.RockBLOCK_Status = RockBLOCK_API.waiting_message();
@@ -192,6 +200,10 @@ int main(void)
         case DOWNLOAD_RB_MESSAGE:
             receive_message = true;
             break;
+        case WAKEUP_NOW:
+            RockBLOCK_API.wakeup();
+            PLL_API.delayMs(20000);
+            break;
         }
         if(receive_message)
         {
@@ -200,9 +212,25 @@ int main(void)
         }
 // Send Message to GSS
         if(signal_quality) {
-            rb_data.RockBLOCK_Status = RB_STATUS_GETTING_SIGNAL;
-            rb_data.RockBLOCK_Status = RockBLOCK_API.get_signal_strength(&rb_data.signal_quality);
             signal_quality = false;
+            rb_data.RockBLOCK_Status = RB_STATUS_GETTING_SIGNAL;
+            rb_data.signal_qualiity = rb_data.RockBLOCK_Status;
+            rb_data.RockBLOCK_Status = RockBLOCK_API.get_signal_strength(&rb_data.signal_quality);
+            rb_data.signal_qualiity = rb_data.RockBLOCK_Status;
+            switch(rb_data.signal_qualiity)
+            {
+            case RB_STATUS_SIGNAL_OK:
+                break;
+            case RB_STATUS_NO_SIGNAL:
+                break;
+            case RB_STATUS_TIMEOUT:
+                break;
+            case RB_STATUS_ERROR:
+                break;
+            default:
+                break;
+            }
+            main_command = WAIT_FOR_RBMESSAGE;
         }
 
         //master_TM4.SendMaster(u1_frame_send.buffer_to_receive, 47);

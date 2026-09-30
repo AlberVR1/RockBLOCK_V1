@@ -162,7 +162,7 @@ RB_Status_t RB_get_signal_strength(uint8_t *level)
     if(output_pf4.current_state != GPIO_STATE_HIGH) {
         RB_Response_t pinstatus = RockBLOCKWakeUp();
         if(pinstatus != RB_WAKEUP_OK) {
-            return RB_STATUS_WAKEUP;
+            return RB_STATUS_WAKEUP_ERROR;
         }
     }
     do {

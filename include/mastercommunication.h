@@ -23,7 +23,8 @@ typedef enum
     COMMAND_UNKNOWED_GLIDER = 5,
     WAIT_FOR_RBMESSAGE = 6,
     DOWNLOAD_RB_MESSAGE = 7,
-    NO_ACTION = 8
+    WAKEUP_NOW = 8,
+    NO_ACTION = 9
 }main_commands_t;
 
 /**
