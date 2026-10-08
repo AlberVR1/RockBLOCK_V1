@@ -21,10 +21,13 @@ const char TRANSFERMESSAGE[] = "$TRANSFER_MESSAGE";
 const char WAKEUP_RB[] = "$WAKEUP_RB";
 const char DOWNLOAD_MESSAGE_RB[] = "$DOWNLOAD_MESSAGE";
 const char GET_SIGNAL_COMMAND[] = "$GET_SIGNAL";
+const char SLEEP_COMMAND[] = "$SLEEP";
 
 void master_callback(uint8_t data);
 
 static UART_Handle_t uart1_handle;
+static volatile uint8_t uart1_sleep_armed;
+static volatile uint8_t uart1_wake_event;
 
 /* RockBlock and Master variables -------------------------------------------------------------------------------*/
 u1_rx_context_master_t rx_cntxt_mstr = {
@@ -139,6 +142,10 @@ Master_Status_t Master_ReadStatus(uint8_t *buffer)
         {
             status = GET_SIGNAL_QUALITY;
         }
+        else if(frame_starts_with_command(read_buffer->frame, SLEEP_COMMAND))
+        {
+            status = SLEEP_REQUEST;
+        }
         else
         {
             status = COMMAND_UNKNOWED;
@@ -218,6 +225,24 @@ static void master_start_frame(void)
     rx_cntxt_mstr.state = SYNC_1;
 }
 
+static void Master_SetSleepMode(bool armed)
+{
+    if(armed) {
+        uart1_wake_event = 0;
+        rx_cntxt_mstr.state = SYNC_0;
+        rx_cntxt_mstr.index = 0;
+        rx_cntxt_mstr.frame_length = 0;
+    }
+    uart1_sleep_armed = armed ? 1U : 0U;
+}
+
+static bool Master_ConsumeWakeEvent(void)
+{
+    bool wake_event = (uart1_wake_event != 0U);
+    uart1_wake_event = 0U;
+    return wake_event;
+}
+
 /**
  * @brief UART1 Callback function to get data from main mcu
  *
@@ -226,6 +251,16 @@ static void master_start_frame(void)
  */
 void master_callback(uint8_t data)
 {
+    /* The first UART1 byte wakes the MCU and is consumed as a wake preamble. */
+    if(uart1_sleep_armed != 0U) {
+        uart1_sleep_armed = 0U;
+        uart1_wake_event = 1U;
+        rx_cntxt_mstr.state = SYNC_0;
+        rx_cntxt_mstr.index = 0;
+        rx_cntxt_mstr.frame_length = 0;
+        return;
+    }
+
     switch(rx_cntxt_mstr.state) {
         case SYNC_0:
             if(data == '$')
@@ -234,7 +269,8 @@ void master_callback(uint8_t data)
             }
             break;
         case SYNC_1:
-            if(data == 'D' || data == 'G' || data == 'R' || data == 'T' || data == 'W')
+            if(data == 'D' || data == 'G' || data == 'R' || data == 'S' ||
+               data == 'T' || data == 'W')
             {
                 frame_mgr_mstr.p_write->frame[rx_cntxt_mstr.index++] = data;
                 rx_cntxt_mstr.frame_length++;
@@ -309,6 +345,8 @@ extern const u1_master_t master_TM4 = {
                           .SendByteMaster = SendByteToMaster,
                           .ReadStatus = Master_ReadStatus,
                           .getstringsize = getsizeofstring,
+                          .setSleepMode = Master_SetSleepMode,
+                          .consumeWakeEvent = Master_ConsumeWakeEvent,
 };
 
 

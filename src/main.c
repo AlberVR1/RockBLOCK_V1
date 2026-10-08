@@ -64,6 +64,7 @@
 
 #include "pll.h"
 #include "SysTick.h"
+#include "power.h"
 #include <RockBLOCK9602.h>
 #include "mastercommunication.h"
 
@@ -73,6 +74,7 @@ typedef enum {
     CONFIGURATION_STATUS_PLL_ERROR,
     CONFIGURATION_STATUS_SYSTICK_ERROR,
     CONFIGURATION_STATUS_UART1_ERROR,
+    CONFIGURATION_STATUS_POWER_ERROR,
     CONFIGURATION_STATUS_ROCKBLOCK_ERROR
 } Configuration_Status_t;
 
@@ -97,7 +99,7 @@ const char MESSAGE_SENT_AND_MESSAGE_IN_QUEUE_PART1[] = "$RB_I,MESSAGESENT_W_";  
 const char MESSAGE_SENT_AND_MESSAGE_IN_QUEUE_PART2[] = "_MIQ#CS";   // Message Sent With New Message In Queue Part2
 
 const char RB_TIMEOUT[] = "$RB_TIMEOUT#CS";
-const char RB_COMMUNICATION_OK[] = "$RB_OK#CS";
+const char RB_COMMUNICATION_OK[] = "$RB_I_OK#CS";
 
 const char MESSAGE_RECEIVED[] = "$RB_I,NEW_MESSAGE_RECEIVED#CS";    // When a Message was received
 const char MESSAGE_RECEIVED_WITH_QUEUE[] = "$RB_I,NEW_MESSAGE_RECEIVED_W_Q#CS";    // When a Message was received and a message in queue exist
@@ -107,6 +109,8 @@ const char SIGNAL_STATUS_OK[] = "$RB_I,STATUS_SIGNAL_OK#CS";
 const char SIGNAL_STATUS_NO_SIGNAL[] = "$RB_I,STATUS_NO_SIGNAL#CS";
 const char SIGNAL_STATUS_TIMEOUT[] = "$RB_I,RB_TIMEOUT#CS";
 const char SIGNAL_STATUS_ERROR[] = "$RB_I,STATUS_ERROR#CS";
+const char MCU_SLEEPING[] = "$RB_I,SLEEPING#CS";
+const char MCU_READY[] = "$RB_I,READY#CS";
 
 const char COMMAND_DOESNT_EXIST[] = "$RB_I,COMMAND UNKNOWED#CS";    // Command doesn't exist
 
@@ -179,6 +183,9 @@ int main(void)
             case GET_SIGNAL_QUALITY:
                 main_command = GET_SIGNAL_QUALITY_NOW;
                 break;
+            case SLEEP_REQUEST:
+                main_command = ENTER_SLEEP;
+                break;
             default:
                 main_command = WAIT_FOR_RBMESSAGE;
                 break;
@@ -231,6 +238,17 @@ int main(void)
         case GET_SIGNAL_QUALITY_NOW:
             RB_GetSignalQuality();
             break;
+        case ENTER_SLEEP:
+            /* Acknowledge the request before sleeping; UART1 RX wakes the core. */
+            master_TM4.setSleepMode(true);
+            master_TM4.SendStringMaster(MCU_SLEEPING, sizeof(MCU_SLEEPING) - 1U);
+            Power_EnterSleep();
+            if(master_TM4.consumeWakeEvent()) {
+                master_TM4.SendStringMaster(MCU_READY, sizeof(MCU_READY) - 1U);
+            }
+            master_TM4.setSleepMode(false);
+            main_command = WAIT_FOR_RBMESSAGE;
+            break;
         }
         if(receive_message)
         {
@@ -238,7 +256,7 @@ int main(void)
             RB_RecieveMessage();
         }
         //master_TM4.SendMaster(u1_frame_send.buffer_to_receive, 47);
-        SYSTICK_API.delay_ms(5000);
+        SYSTICK_API.delay_ms(1000);
     }
 }
 
@@ -263,6 +281,10 @@ Configuration_Status_t configuration(void)
     UART_Status_t status_uart1 = master_TM4.mainconf();
     if(status_uart1 != UART_STATUS_SUCCESS) {
         return CONFIGURATION_STATUS_UART1_ERROR;
+    }
+
+    if(Power_ConfigureSleepWakeSources() != POWER_STATUS_SUCCESS) {
+        return CONFIGURATION_STATUS_POWER_ERROR;
     }
 
     // Configure UART2, GPIOS for RockBLOCK

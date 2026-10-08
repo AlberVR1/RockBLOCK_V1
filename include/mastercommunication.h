@@ -27,7 +27,8 @@ typedef enum
     DOWNLOAD_RB_MESSAGE = 7,
     WAKEUP_NOW = 8,
     GET_SIGNAL_QUALITY_NOW = 9,
-    NO_ACTION = 10
+    NO_ACTION = 10,
+    ENTER_SLEEP = 11
 }main_commands_t;
 
 /**
@@ -61,7 +62,8 @@ typedef enum
     WAKEUP = 8,
     DOWNLOAD_MESSAGE = 9,
     CHECK_QUEUE_MESSAGES = 10,
-    GET_SIGNAL_QUALITY = 11
+    GET_SIGNAL_QUALITY = 11,
+    SLEEP_REQUEST = 12
 }Master_Status_t;
 
 /**
@@ -131,6 +133,8 @@ typedef struct
     void (*SendByteMaster)(uint8_t data);
     Master_Status_t (*ReadStatus)(uint8_t *buffer);
     uint32_t (*getstringsize)(const uint8_t *str1);
+    void (*setSleepMode)(bool armed);
+    bool (*consumeWakeEvent)(void);
 }u1_master_t;
 
 /**
